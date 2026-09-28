@@ -219,7 +219,7 @@ export default function App() {
           </nav>
         </div>
         <div className="titlebar-right">
-          <span className="badge">Masaüstü v0.1</span>
+          <span className="badge">CogNote v0.1</span>
         </div>
       </header>
 
@@ -255,6 +255,7 @@ export default function App() {
                     ×
                   </button>
                   <textarea
+                  className="card-textarea"
                     autoFocus={note.text === ""}
                     placeholder="Notunuzu yazın..."
                     value={note.text}
