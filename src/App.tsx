@@ -8,16 +8,18 @@ import { openInWeb } from "./services/aiService";
 import { SettingsModal } from "./components/SettingsModal";
 import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
 import { AboutModal } from "./components/AboutModal";
+import { ThemeModal } from "./components/ThemeModal";
+import { applyTheme } from "./services/themeService";
 
 export default function App() {
-  const { notes, addNote, updateNoteText, deleteNote, askAI, setAllNotes, handleCalendarAgent} = useNotes();
+  const { notes, addNote, updateNoteText, deleteNote, askAI, setAllNotes, handleCalendarAgent } = useNotes();
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [calendarDate, setCalendarDate] = useState(new Date());
   const monthNames = [
-  "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
-  "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"
+    "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
+    "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"
   ];
   const daysOfWeek = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
   const calYear = calendarDate.getFullYear();
@@ -31,10 +33,22 @@ export default function App() {
   const textNotes = notes.filter((n) => n.type === "text");
   const questionNotes = notes.filter((n) => n.type === "question");
   const reminderNotes = notes.filter((n) => n.type === "reminder");
+  const upcomingReminders = reminderNotes.filter((note) => {
+    const rawDate = (note as any).eventDate || note.text?.match(/\d{4}-\d{2}-\d{2}/)?.[0];
+    if (!rawDate) return false;
+    const targetDate = new Date(rawDate);
+    if (isNaN(targetDate.getTime())) return false;
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const targetDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
+    const sevenDaysLater = new Date(startOfToday);
+    sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
+    return targetDay >= startOfToday && targetDay <= sevenDaysLater;
+  });
   const [isCalendarOpen, setIsCalendarOpen] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
+  const [isThemeOpen, setIsThemeOpen] = useState(false);
 
   const handleDeleteRequest = (id: string, text: string) => {
     if (!text.trim()) {
@@ -64,16 +78,26 @@ export default function App() {
   }, []);
 
   const formatDate = (isoStr?: string) => {
-  if (!isoStr) return "";
-  const date = new Date(isoStr);
-  return date.toLocaleDateString("tr-TR", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+    if (!isoStr) return "";
+    const date = new Date(isoStr);
+    return date.toLocaleDateString("tr-TR", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
 
-};
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("cognote_theme");
+    if (savedTheme) {
+      try {
+        applyTheme(JSON.parse(savedTheme));
+      } catch (e) {
+        console.error("Tema yüklenemedi", e);
+      }
+    }
+  }, []);
 
   return (
     <div className="app-container">
@@ -92,16 +116,16 @@ export default function App() {
                 <div className="dropdown-menu">
                   <div 
                     className="dropdown-item"
-                    onClick={async() => {
+                    onClick={async () => {
                       setActiveMenu(null);
                       const success = await exportNotes(notes);
                       if (success) {
-                        alert ("Notlar başarıyla dışa aktarıldı!")
+                        alert("Notlar başarıyla dışa aktarıldı!");
                       }
                     }}
-                    >
-                      Notları Dışa Aktar (.json)
-                    </div>
+                  >
+                    Notları Dışa Aktar (.json)
+                  </div>
                   <div
                     className="dropdown-item"
                     onClick={async () => {
@@ -171,16 +195,16 @@ export default function App() {
                   </div>
                   <div className="dropdown-divider" />
                   <div
-                  className="dropdown-item text-danger"
-                  onClick={() => {
-                    setActiveMenu(null);
-                    if (notes.length > 0) {
-                      setIsDeleteModalOpen(true)
-                    };
-                  }}
-                >
-                  Tüm Notları Temizle
-                </div>
+                    className="dropdown-item text-danger"
+                    onClick={() => {
+                      setActiveMenu(null);
+                      if (notes.length > 0) {
+                        setIsDeleteModalOpen(true);
+                      }
+                    }}
+                  >
+                    Tüm Notları Temizle
+                  </div>
                 </div>
               )}
             </div>
@@ -193,12 +217,20 @@ export default function App() {
               </button>
               {activeMenu === "settings" && (
                 <div className="dropdown-menu">
-                  <div className="dropdown-item">Tema Ayarları</div>
+                  <div 
+                    className="dropdown-item"
+                    onClick={() => {
+                      setIsThemeOpen(true);
+                      setActiveMenu(null);
+                    }}
+                  >
+                    Tema Ayarları
+                  </div>
                   <div 
                     className="dropdown-item"
                     onClick={() => {
                       setIsSettingsOpen(true);
-                      setActiveMenu(null); // Menü tıklandıktan sonra dropdown kapansın
+                      setActiveMenu(null);
                     }}
                   >
                     Gemini API Anahtarı
@@ -215,7 +247,7 @@ export default function App() {
                   </div>
                 </div>
               )}
-              </div>
+            </div>
           </nav>
         </div>
         <div className="titlebar-right">
@@ -255,7 +287,7 @@ export default function App() {
                     ×
                   </button>
                   <textarea
-                  className="card-textarea"
+                    className="card-textarea"
                     autoFocus={note.text === ""}
                     placeholder="Notunuzu yazın..."
                     value={note.text}
@@ -301,11 +333,10 @@ export default function App() {
                     {note.aiResponse && (
                       <div className="ai-response-box">
                         <ReactMarkdown>{note.aiResponse}</ReactMarkdown>
-                        
-                        <div style={{textAlign: "right", marginTop: "6px"}}>
+                        <div style={{ textAlign: "right", marginTop: "6px" }}>
                           <a 
                             href="#more"
-                            onClick={(e)=> {
+                            onClick={(e) => {
                               e.preventDefault();
                               openInWeb(note.text);
                             }}
@@ -352,7 +383,6 @@ export default function App() {
                     >
                       {note.isAiLoading ? "⏳ Analiz Ediliyor..." : "✦ Takvime Aktar (Agent)"}
                     </button>
-
                     {note.aiResponse && (
                       <div className="ai-response-box">
                         <ReactMarkdown>{note.aiResponse}</ReactMarkdown>
@@ -368,7 +398,6 @@ export default function App() {
           </div>
         </main>
         <div className="calendar-panel">
-          {/* Üst Buton */}
           <div className="calendar-header">
             <button 
               className="calendar-btn"
@@ -378,12 +407,10 @@ export default function App() {
             </button>
           </div>
 
-          {/* Açıksa Takvim, Kapalıysa Yer Tutucu */}
-          {isCalendarOpen ? (
-            <div className="calendar-body">
-              {/* Ay Başlığı ve Yönlendirme */}
+          <div className="calendar-content-wrapper">
+            <div className={`calendar-body ${isCalendarOpen ? "open" : "closed"}`}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 600, color: "#f8fafc" }}>
+                <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 600, color: "var(--text-main)" }}>
                   {monthNames[calMonth]} {calYear}
                 </h3>
                 <div style={{ display: "flex", gap: "8px" }}>
@@ -409,14 +436,12 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Gün İsimleri */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", textAlign: "center", color: "#94a3b8", fontSize: "0.85rem", fontWeight: 500, marginBottom: "8px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", textAlign: "center", color: "var(--text-muted)", fontSize: "0.85rem", fontWeight: 500, marginBottom: "8px" }}>
                 {daysOfWeek.map((day) => (
                   <div key={day} style={{ padding: "4px 0" }}>{day}</div>
                 ))}
               </div>
 
-              {/* Gün Izgarası */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "8px", marginTop: "12px" }}>
                 {Array.from({ length: firstDayIndex }).map((_, i) => (
                   <div key={`empty-${i}`} className="cal-empty-cell" />
@@ -445,9 +470,8 @@ export default function App() {
                 })}
               </div>
 
-              {/* Seçilen Gün Detayları */}
               <div className="cal-selected-details">
-                <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#94a3b8", marginBottom: "8px" }}>
+                <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-muted)", marginBottom: "8px" }}>
                   {selectedDate ? `Seçili Tarih: ${selectedDate}` : "Detay görmek için bir gün seçin"}
                 </div>
 
@@ -462,19 +486,33 @@ export default function App() {
                       ))}
                     
                     {reminderNotes.filter((n) => (n.text && n.text.includes(selectedDate)) || ((n as any).eventDate && (n as any).eventDate.startsWith(selectedDate))).length === 0 && (
-                      <div style={{ fontSize: "0.8rem", color: "#64748b" }}>Bu tarihte kayıtlı hatırlatıcı yok.</div>
+                      <div style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Bu tarihte kayıtlı hatırlatıcı yok.</div>
                     )}
                   </div>
                 )}
               </div>
             </div>
-          ) : (
-            <div className="calendar-collapsed-placeholder">
-              <span style={{ fontSize: "0.85rem", color: "#64748b" }}>
-                Takvimi açmak için butona tıklayın.
-              </span>
+
+            <div className={`calendar-collapsed-placeholder ${!isCalendarOpen ? "open" : "closed"}`}>
+              <div className="collapsed-header-title"></div>
+              {upcomingReminders.length > 0 ? (
+                <div className="collapsed-reminder-list">
+                  {upcomingReminders.map((note) => (
+                    <div key={note.id} className="collapsed-reminder-item">
+                      <span className="collapsed-bullet">•</span>
+                      <span className="collapsed-text">
+                        {note.text.trim() ? note.text : "İsimsiz Hatırlatma"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <span className="collapsed-empty-text">
+                  Yaklaşan hatırlatıcı bulunmamaktadır.
+                </span>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
       {deleteTargetId && (
@@ -507,6 +545,10 @@ export default function App() {
       <AboutModal 
         isOpen={isAboutOpen} 
         onClose={() => setIsAboutOpen(false)} 
+      />
+      <ThemeModal 
+        isOpen={isThemeOpen} 
+        onClose={() => setIsThemeOpen(false)} 
       />
     </div>
   );
